@@ -1,6 +1,6 @@
 import streamlit as st
 import pandas as pd
-import pyodbc
+import sqlalchemy as sa
 import plotly.graph_objects as go
 
 # --- SQL Config ---
@@ -9,7 +9,9 @@ database = 'NEW_WESM2'
 username = 'sa'
 password = 'm0s-$md'
 
-conn_str = f"DRIVER={{SQL Server}};SERVER={server};DATABASE={database};UID={username};PWD={password}"
+# --- Connection string (pymssql) ---
+conn_str = f"mssql+pymssql://{username}:{password}@{server}/{database}"
+engine = sa.create_engine(conn_str)
 
 # --- Load Data ---
 def load_data(start_date=None, end_date=None):
@@ -24,9 +26,9 @@ def load_data(start_date=None, end_date=None):
     if start_date and end_date:
         query += f" WHERE DELIVERY_DATE BETWEEN '{start_date}' AND '{end_date}'"
 
-    with pyodbc.connect(conn_str) as conn:
-        df = pd.read_sql(query, conn)
+    df = pd.read_sql(query, engine)
 
+    # --- Processing ---
     df["delivery_hour"] = df["delivery_hour"].astype(int)
     mask = df["delivery_hour"] == 24
     df.loc[mask, "delivery_hour"] = 0
@@ -71,7 +73,6 @@ st.markdown("""
     border-radius: 6px;
     margin: 5px 0 10px 0;
 }
-
 .card {
     background-color: rgba(255,255,255,0.88);
     padding:10px;
@@ -128,7 +129,7 @@ if load_button:
                 metric_cols[3].markdown(f'<div class="card"><b>✅ Compliance Rate</b><br>{compliance_rate:.1f}%</div>', unsafe_allow_html=True)
                 metric_cols[4].markdown(f'<div class="card"><b>⚠️ Intervals Below PMIN</b><br>{intervals_below}</div>', unsafe_allow_html=True)
 
-                # --- Graph (Interactive Plotly with Border) ---
+                # --- Graph (Interactive Plotly with Download Toolbar) ---
                 with st.container():
                     fig = go.Figure()
 
@@ -160,7 +161,7 @@ if load_button:
                         marker=dict(color='red', symbol='x', size=12)
                     ))
 
-                    # Layout: y-axis limits, x-axis, border around plotting area
+                    # Layout
                     fig.update_layout(
                         yaxis=dict(
                             title="MW", 
@@ -185,7 +186,18 @@ if load_button:
                         autosize=True,
                     )
 
-                    st.plotly_chart(fig, use_container_width=True, config={'responsive': True})
+                    st.plotly_chart(
+                        fig,
+                        use_container_width=True,
+                        config={
+                            "responsive": True,
+                            "toImageButtonOptions": {
+                                "format": "png",
+                                "filename": f"{region}_graph",
+                                "scale": 2
+                            }
+                        }
+                    )
 
                 # --- Violations Table ---
                 with st.expander("⚠️ Intervals Below PMIN"):
