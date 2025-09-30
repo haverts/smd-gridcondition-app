@@ -1,6 +1,6 @@
 import streamlit as st
 import pandas as pd
-import sqlalchemy as sa
+import pyodbc
 import plotly.graph_objects as go
 
 # --- SQL Config ---
@@ -9,9 +9,7 @@ database = 'NEW_WESM2'
 username = 'sa'
 password = 'm0s-$md'
 
-# --- Connection string (pymssql) ---
-conn_str = f"mssql+pymssql://{username}:{password}@{server}/{database}"
-engine = sa.create_engine(conn_str)
+conn_str = f"DRIVER={{SQL Server}};SERVER={server};DATABASE={database};UID={username};PWD={password}"
 
 # --- Load Data ---
 def load_data(start_date=None, end_date=None):
@@ -26,9 +24,9 @@ def load_data(start_date=None, end_date=None):
     if start_date and end_date:
         query += f" WHERE DELIVERY_DATE BETWEEN '{start_date}' AND '{end_date}'"
 
-    df = pd.read_sql(query, engine)
+    with pyodbc.connect(conn_str) as conn:
+        df = pd.read_sql(query, conn)
 
-    # --- Processing ---
     df["delivery_hour"] = df["delivery_hour"].astype(int)
     mask = df["delivery_hour"] == 24
     df.loc[mask, "delivery_hour"] = 0
@@ -186,6 +184,7 @@ if load_button:
                         autosize=True,
                     )
 
+                    # Show chart with toolbar download option
                     st.plotly_chart(
                         fig,
                         use_container_width=True,
